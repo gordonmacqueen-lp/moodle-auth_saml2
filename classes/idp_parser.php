@@ -13,7 +13,6 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
-namespace auth_saml2;
 
 /**
  * IdP metadata parser class.
@@ -23,6 +22,10 @@ namespace auth_saml2;
  * @copyright Catalyst IT
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+namespace auth_saml2;
+
+defined('MOODLE_INTERNAL') || die();
+
 class idp_parser {
     /**
      * @var array
@@ -38,7 +41,7 @@ class idp_parser {
      * "https://idpurl https://idpicon"
      * "https://idpurl"
      *
-     * @param string $data
+     * @param $data
      * @return \auth_saml2\idp_data[]
      */
     public function parse($data) {
@@ -55,8 +58,6 @@ class idp_parser {
 
     /**
      * Does the field *look* like xml, mostly?
-     *
-     * @param string $xml
      */
     public function check_xml($xml) {
 
@@ -75,71 +76,129 @@ class idp_parser {
         return false;
     }
 
-    /**
-     * Parse the xml
-     *
-     * @param string $xml
-     */
     public function parse_xml($xml) {
         $singleidp = new \auth_saml2\idp_data(null, 'xml', null);
         $singleidp->set_rawxml(trim($xml));
         $this->idps[] = $singleidp;
     }
 
-    /**
-     * Parse the urls
-     *
-     * @param string $urls
-     */
     public function parse_urls($urls) {
         // First split the contents based on newlines.
         $lines = preg_split('#\R#', $urls);
 
         foreach ($lines as $line) {
             $idpdata = null;
-            $scheme = 'http';
+            $idpname = null; 
+            $idpurl = null;
+            $idpicon = null;
+            $matchesfound = 0;
 
             $line = trim($line);
             if (!$line) {
                 continue;
             }
 
-            // Separate the line base on the scheme http. The scheme added back to the urls.
-            $parts = array_map('rtrim', explode($scheme, $line));
+            // Separate the line based on the space character.
+            // $parts = array_map('rtrim', explode(' ', $line));
+            $parts = explode(' ', $line);
+    
+            // echo '<pre>';
+            // echo 'parts - idp_parser.php('. __LINE__ .'):<br>';
+            // print_r($parts);
+            // echo '</pre>';
 
-            if (count($parts) === 3) {
-                // With three elements I will assume that it was entered in the correct format.
-                $idpname = $parts[0];
-                $idpurl = $scheme . $parts[1];
-                $idpicon = $scheme . $parts[2];
+            for ($i = 0; $i < count($parts); $i++) {
+                // echo '<pre>';
+                // echo 'parts['.$i.'] - idp_parser.php('. __LINE__ .'):<br>';
+                // print_r($parts[$i]);
+                // echo '</pre>';
+                
+                preg_match('(https?)', $parts[$i], $matches);
+                // echo '<pre>';
+                // echo 'matches - idp_parser.php('. __LINE__ .'):<br>';
+                // print_r($matches);
+                // echo '</pre>';
 
-                $idpdata = new \auth_saml2\idp_data($idpname, $idpurl, $idpicon);
-
-            } else if (count($parts) === 2) {
-                // Two elements could either be a IdPName + IdPURL, or IdPURL + IdPIcon.
-
-                // Detect if $parts[0] starts with a URL.
-                if (substr($parts[0], 0, 8) === 'https://' ||
-                    substr($parts[0], 0, 7) === 'http://') {
-                    $idpurl = $scheme . $parts[1];
-                    $idpicon = $scheme . $parts[2];
-
-                    $idpdata = new \auth_saml2\idp_data(null, $idpurl, $idpicon);
+                if (empty($matches)) {
+                    // echo '<pre>';
+                    // echo 'NO MATCH - idp_parser.php('. __LINE__ .'):<br>';
+                    // echo '</pre>';
+                    $idpname[] = $parts[$i];
+                    
                 } else {
-                    // We would then know that is a IdPName + IdPURL combo.
-                    $idpname = $parts[0];
-                    $idpurl = $scheme . $parts[1];
-
-                    $idpdata = new \auth_saml2\idp_data($idpname, $idpurl, null);
+                    $matchesfound++;
+                    if ($matchesfound === 1) {
+                        $idpurl = $parts[$i];
+                    } else if ($matchesfound === 2) {
+                        $idpicon = $parts[$i];
+                    }
                 }
-
-            } else if (count($parts) === 1) {
-                // One element is the previous default.
-                $idpurl = $scheme . $parts[0];
-                $idpdata = new \auth_saml2\idp_data(null, $idpurl, null);
             }
 
+            if (!empty($idpname)) {
+                $idpname = implode(' ', $idpname);
+            }
+            echo '<pre>';
+            echo 'idpname - idp_parser.php('. __LINE__ .'): ';
+            print_r((is_null($idpname) ? 'NULL' : $idpname));
+            echo "\n";
+            echo 'idpurl - idp_parser.php('. __LINE__ .'): ';
+            print_r((is_null($idpurl) ? 'NULL' : $idpurl));
+            echo "\n";
+            echo 'idpicon - idp_parser.php('. __LINE__ .'): ';
+            print_r((is_null($idpicon) ? 'NULL' : $idpicon));
+            echo '</pre>';
+
+
+            $idpdata = new \auth_saml2\idp_data($idpname, $idpurl, $idpicon);
+            
             $this->idps[] = $idpdata;
+            
+            
+
+            // if (count($parts) === 3) {
+            //     // With three elements I will assume that it was entered in the correct format.
+            //     $idpname = $parts[0];
+            //     $idpurl = $parts[1];
+            //     $idpicon = $parts[2];
+
+            //     $idpdata = new \auth_saml2\idp_data($idpname, $idpurl, $idpicon);
+
+            // } else if (count($parts) === 2) {
+            //     // Two elements could either be a IdPName + IdPURL, or IdPURL + IdPIcon.
+
+            //     // Detect if $parts[0] starts with a URL.
+            //     if (substr($parts[0], 0, 8) === 'https://' ||
+            //         substr($parts[0], 0, 7) === 'http://') {
+            //         echo '<pre>';
+            //         echo 'PARTS CONTAINS http or https - idp_parser.php('. __LINE__ .'):<br>';
+            //         echo '</pre>';
+                    
+            //         $idpurl = $parts[1];
+            //         $idpicon = $parts[2];
+
+            //         $idpdata = new \auth_saml2\idp_data(null, $idpurl, $idpicon);
+            //     } else {
+            //         // We would then know that is a IdPName + IdPURL combo.
+            //         $idpname = $parts[0];
+            //         $idpurl = $parts[1];
+                    
+            //         echo '<pre>';
+            //         echo 'ELSE http or https - idp_parser.php('. __LINE__ .'):<br>';
+            //         print_r($idpname);
+            //         echo "\n";
+            //         print_r($idpurl);
+            //         echo '</pre>';
+            //         $idpdata = new \auth_saml2\idp_data($idpname, $idpurl, null);
+            //     }
+
+            // } else if (count($parts) === 1) {
+            //     // One element is the previous default.
+            //     $idpurl = $parts[0];
+            //     $idpdata = new \auth_saml2\idp_data(null, $idpurl, null);
+            // }
+
+            // $this->idps[] = $idpdata;
         }
     }
 }
